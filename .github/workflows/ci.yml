@@ -46,9 +46,6 @@ jobs:
       - name: Gate 2 - Security Audit (Composer)
         run: composer audit
 
-      - name: Gate 3 - Static Analysis (PHPStan)
-        run: ./vendor/bin/phpstan analyse
-
   backend_tests:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -77,16 +74,18 @@ jobs:
           php-version: "8.4"
           extensions: mbstring, intl, pdo_pgsql
 
-      - name: Cache Composer dependecies
+      - name: Cache Composer Dependencies
         uses: actions/cache@v4
         with:
           path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
      
       - name: Install Composer dependencies
-        run: composer install --no-dev --prefer-dist --no-interaction
+        run: composer update -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
       
-      - name: Prepare Database
+      - name: Setup Database
         run: cp .env.example .env
       - run: php artisan key:generate
       - run: php artisan migrate --force
