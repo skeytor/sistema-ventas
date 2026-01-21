@@ -47,7 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          echo
           RELEASE="${{ github.sha }}"
           ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
           "mkdir -p /var/www/comprasventas/releases/$RELEASE"
