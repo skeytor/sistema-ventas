@@ -10,12 +10,17 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+
+  # ==================================================================
+  # JOB 1: BACKEND QUALITY GATES (PHP/Laravel)
+  # ==================================================================
   backend_quality:
     name: Backend Quality Checks
     runs-on: ubuntu-latest
@@ -40,12 +45,18 @@ jobs:
       - name: Install Composer dependencies
         run: composer update -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
 
-      - name: Gate 1 - PHP Code Style
+      - name: "GATE 1: PHP Code Style"
         run: ./vendor/bin/pint --test
 
-      - name: Gate 2 - Security Audit (Composer)
+      - name: "GATE 2: Static Analysis"
+        run: ./vendor/bin/phpstan analyse -c phpstan.neon --memory-limit=1G
+
+      - name: "GATE 3: Security Audit (Composer)"
         run: composer audit
 
+  # ==================================================================
+  # JOB 2: BACKEND TESTS (PHP/Laravel)
+  # ==================================================================
   backend_tests:
     name: Backend Tests
     runs-on: ubuntu-latest
@@ -87,8 +98,11 @@ jobs:
       
       - name: Setup Database
         run: cp .env.example .env
+
       - run: php artisan key:generate
-      - run: php artisan migrate --force
+      
+      - name: Run Migrations
+        run: php artisan migrate --force
         env:
           DB_CONNECTION: pgsql
           DB_HOST: 127.0.0.1
@@ -97,9 +111,20 @@ jobs:
           DB_USERNAME: user
           DB_PASSWORD: password
 
-      - name: Gate 4 - Unit and Feature Tests with PostgreSQL
-        run: php artisan test
+      - name: "GATE 4: PHPUnit Tests with Coverage"
+        run: php artisan test --coverage-text --coverage-clover=coverage.xml
+      
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: coverage.xml
+          retention-days: 5
 
+  # ==================================================================
+  # JOB 3: FRONTEND QUALITY GATES (Node.js)
+  # ==================================================================
   frontend_quality:
     name: Frontend Quality Gates
     runs-on: ubuntu-latest
@@ -117,16 +142,16 @@ jobs:
       - name: Install NPM dependencies
         run: npm ci
 
-      - name: Gate 1 - Code Style
+      - name: "GATE 5: Code Style"
         run: npm run lint
 
-      - name: Gate 2 - Security Audit
+      - name: "GATE 6: Security Audit"
         run: npm audit --audit-level=moderate
 
-      - name: Gate 3 - Unit Tests  
+      - name: "GATE 7: Unit Tests"
         run: npm run test
 
-      - name: Gate 4 - Build Verification
+      - name: "GATE 8: Build Verification"
         run: npm run build
 
   summary:
