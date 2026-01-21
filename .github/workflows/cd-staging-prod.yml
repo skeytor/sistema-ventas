@@ -47,12 +47,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          RELEASE="${{ github.sha }}" 
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} 
-          "mkdir -p /var/www/comprasventas/releases/$RELEASE" 
-          rsync -avz ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/var/www/comprasventas/releases/$RELEASE 
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} 
-          " cd /var/www/comprasventas/releases/$RELEASE && php artisan optimize:clear || true && php artisan migrate --force && ln -sfn /var/www/comprasventas/releases/$RELEASE /var/www/comprasventas/current "
+          echo
+          RELEASE="${{ github.sha }}"
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
+          "mkdir -p /var/www/comprasventas/releases/$RELEASE"
+          rsync -avz ./ ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/var/www/comprasventas/releases/$RELEASE
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
+          "cd /var/www/comprasventas/releases/$RELEASE && php artisan optimize:clear || true && php artisan migrate --force && ln -sfn /var/www/comprasventas/releases/$RELEASE /var/www/comprasventas/current"
       - run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
 
   deploy_production:
@@ -68,10 +69,10 @@ jobs:
           if [ -z "$RELEASE" ]; then
             RELEASE=manual
           fi
-          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
           "mkdir -p /var/www/comprasventas/releases/$RELEASE" 
           rsync -avz ./ ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:/var/www/comprasventas/releases/$RELEASE 
-          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} 
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
           " cd /var/www/comprasventas/releases/$RELEASE && php artisan optimize:clear || true && php artisan migrate --force && ln -sfn /var/www/comprasventas/releases/$RELEASE /var/www/comprasventas/current "
       - run: curl -f "${{ secrets.PROD_APP_URL }}/api/health"
   
@@ -82,7 +83,7 @@ jobs:
     needs: deploy_staging
     steps:
       - run: |
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
           " PREV=\$(ls -1dt /var/www/comprasventas/releases/*/ | sed -n '2p' | tr -d '/') && \
           [ -n \"\$PREV\" ] && \
           ln -sfn \$PREV /var/www/comprasventas/current "
@@ -94,7 +95,7 @@ jobs:
     needs: deploy_production
     steps:
       - run: |
-          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
           " PREV=\$(ls -1dt /var/www/comprasventas/releases/*/ | sed -n '2p' | tr -d '/') && \
           [ -n \"\$PREV\" ] && \
           ln -sfn \$PREV /var/www/comprasventas/current "
