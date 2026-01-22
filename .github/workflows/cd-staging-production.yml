@@ -103,7 +103,7 @@ jobs:
       
       - name: Transfer Release Artifact to Staging Server
         run: |
-          rsync -avz deployment/release-${{ github.sha }}.tar.gz \
+          rsync -avz release-${{ github.sha }}.tar.gz \
           ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}/
 
       - name: Deploy Application on Staging Server
