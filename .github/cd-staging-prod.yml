@@ -34,7 +34,9 @@ jobs:
         with:
           name: release-${{ github.ref_name }}
           path: | 
-            public/build vendor RELEASE_ID
+            public/build 
+            vendor 
+            RELEASE_ID
             
   deploy_staging:
     name: Deploy to Staging

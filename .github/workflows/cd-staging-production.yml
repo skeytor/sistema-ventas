@@ -1,0 +1,109 @@
+name: CD - Staging + Production
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  PHP_VERSION: '8.4'
+  NODE_VERSION: '20'
+  DEPLOY_DIR: '/var/www/comprasventas'
+
+jobs:
+
+  # ============================================================
+  # JOB 1: BUILD
+  # ============================================================
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, bcmath, xml, ctype, json, tokenizer, curl, mysql, zip, pgsql, pdo_pgsql
+          coverage: none
+
+      - name: Cache Composer Dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-prod-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            composer-prod-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer update -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Build Assets
+        run: npm run build
+
+      - name: Create deployment artifact
+        run: |
+          mkdir -p deployment
+          tar -czf deployment/release-${{ github.sha }}.tar.gz \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=tests \
+            --exclude=storage/logs/*.log \
+            --exclude=.env \
+            .
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: deployment/release-${{ github.sha }}.tar.gz
+          retention-days: 7
+
+  # ============================================================
+  # JOB 2: DEPLOY TO STAGING
+  # ============================================================
+  stage:
+    name: Deploy to Staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: build
+
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+    
+      - name: Deploy to Staging Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+            mkdir -p $RELEASE_DIR
+            tar -xzf release-${{ github.sha }}.tar.gz -C $RELEASE_DIR
+            cd $RELEASE_DIR
+            php artisan optimize:clear || true
+            php artisan migrate --force
+            ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+
+      - name: Verify Staging Deployment
+        run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
