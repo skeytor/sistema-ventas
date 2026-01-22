@@ -90,20 +90,20 @@ jobs:
         with:
           name: release-${{ github.sha }}
     
-      # - name: Deploy to Staging Server
-      #   uses: appleboy/ssh-action@v1.2.2
-      #   with:
-      #     host: ${{ secrets.STAGING_HOST }}
-      #     username: ${{ secrets.STAGING_USER }}
-      #     password: ${{ secrets.STAGING_PASSWORD }}
-      #     script: |
-      #       RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
-      #       mkdir -p $RELEASE_DIR
-      #       tar -xzf release-${{ github.sha }}.tar.gz -C $RELEASE_DIR
-      #       cd $RELEASE_DIR
-      #       php artisan optimize:clear || true
-      #       php artisan migrate --force
-      #       ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+      - name: Deploy to Staging Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+            mkdir -p $RELEASE_DIR
+            tar -xzf release-${{ github.sha }}.tar.gz -C $RELEASE_DIR
+            cd $RELEASE_DIR
+            php artisan optimize:clear || true
+            php artisan migrate --force
+            ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
 
       - name: Verify Staging Deployment
         run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
