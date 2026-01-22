@@ -104,25 +104,36 @@ jobs:
       #       php artisan optimize:clear || true
       #       php artisan migrate --force
       #       ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+
+      - name: Install rsync
+        run: sudo apt-get install -y rsync
+
       - name: Create Release Directory on Staging Server
         run: |
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "mkdir -p ${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+          RELEASE_FILE="release-${{ github.sha }}.tar.gz"
+          RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "mkdir -p $RELEASE_DIR"
 
       - name: Upload Files to Staging Server
         run: |
-          rsync -avz release-${{ github.sha }}.tar.gz \
-          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}/
+          rsync -avz $RELEASE_FILE \
+          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:$RELEASE_DIR/
 
       - name: Extract and Set Up Application on Staging Server
         run: |
           ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} "
-          cd ${{ env.DEPLOY_DIR }}/releases/${{ github.sha }} && \
-          tar -xzf release-${{ github.sha }}.tar.gz && \
-          rm release-${{ github.sha }}.tar.gz && \
+          cd $RELEASE_DIR && \
+          tar -xzf $RELEASE_FILE && \
+          rm $RELEASE_FILE && \
+          ln -sf ${{ env.DEPLOY_DIR }}/shared/.env .env && \
+          rm -rf storage && \
           ln -sf ${{ env.DEPLOY_DIR }}/shared/storage storage && \
           php artisan optimize:clear || true && \
+          php artisan config:cache && \
+          php artisan route:cache && \
+          php artisan view:cache && \
           php artisan migrate --force && \
-          ln -sfn ${{ env.DEPLOY_DIR }}/releases/${{ github.sha }} ${{ env.DEPLOY_DIR }}/current
+          ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
           "
       - name: Verify Staging Deployment
         run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
