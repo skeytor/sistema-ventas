@@ -54,25 +54,66 @@ jobs:
         run: npm ci
 
       - name: Build Assets
-        run: npm run build
+        run: |
+          npm run build
+          echo "Assets built successfully."
 
       - name: Create deployment artifact
         run: |
           mkdir -p deployment
           tar -czf deployment/release-${{ github.sha }}.tar.gz \
-            --exclude=node_modules \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=tests \
-            --exclude=storage/logs/*.log \
-            --exclude=.env \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='.env.local' \
+            --exclude='storage/app/*' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/cache/data/*' \
+            --exclude='storage/framework/sessions/*' \
+            --exclude='storage/framework/views/*' \
+            --exclude='tests' \
+            --exclude='*.md' \
+            --exclude='.github' \
+            --exclude='.editorconfig' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='phpunit.xml' \
+            --exclude='vitest.config.js' \
+            --exclude='eslint.config.js' \
+            --exclude='.claude' \
             .
+
+      - name: Setup Environment for Optimization
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Optimize Laravel
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          echo "Laravel optimized successfully."
+
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ github.sha }}
           path: deployment/release-${{ github.sha }}.tar.gz
           retention-days: 7
+          
+      # Summary
+      - name: Build Summary
+        run: |
+          echo "## Build & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Artifact** | \`release-${{ github.sha }}.tar.gz\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Release created successfully!" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================
   # JOB 2: DEPLOY TO STAGING
@@ -106,6 +147,31 @@ jobs:
           rsync -avz release-${{ github.sha }}.tar.gz \
           ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}/
 
+      - name: Predeploy Checks on Staging Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            echo "Running pre-deployment checks..."
+            
+            # Check shared directory
+            if [ ! -d "${{ env.DEPLOY_DIR }}/shared" ]; then
+              echo "Creating shared directory..."
+              mkdir -p "${{ env.DEPLOY_DIR }}/shared"
+            fi
+            echo "Shared directory exists."
+            
+            # Check .env file
+            if [ ! -f "${{ env.DEPLOY_DIR }}/shared/.env" ]; then
+              echo ".env file not found"
+              exit 1
+            fi
+            echo ".env file exists"   
+
+            echo "Pre-deployment checks completed."
+
       - name: Deploy Application on Staging Server
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -116,20 +182,25 @@ jobs:
             RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
             RELEASE_FILE="release-${{ github.sha }}.tar.gz"
 
-            echo "Extracting release artifact..."
+            echo "📂 Extracting release artifact..."
             cd $RELEASE_DIR
             tar -xzf $RELEASE_FILE
             rm $RELEASE_FILE
-            ln -sf ${{ env.DEPLOY_DIR }}/shared/.env .env
+            echo "✅ Extraction completed."
+
+            echo "🔗 Creating symlinks..."
             rm -rf storage
-            ln -sf ${{ env.DEPLOY_DIR }}/shared/storage storage
-            php artisan optimize:clear || true
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+            ln -sfn $RELEASE_DIR/storage ${{ env.DEPLOY_DIR }}/shared/storage
+            ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
+            echo "✅ Symlinks created."
+
+            echo "📂 Running Migrations..."
             php artisan migrate --force
+
+            echo "🔗 Updating current symlink..."
             ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
-            echo "Deployment to staging server completed."
+
+            echo "✅ Deployment to staging server completed."
 
       - name: Verify Staging Deployment
         run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
