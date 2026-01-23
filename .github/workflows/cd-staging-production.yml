@@ -213,7 +213,7 @@ jobs:
       - name: Download deployment artifact
         uses: actions/download-artifact@v4
         with:
-          name: release-${{ github.ref_name || github.sha }}
+          name: release-${{ github.sha }}
       
       - name: Create Release Directory on Production Server
         uses: appleboy/ssh-action@v1.2.2
@@ -222,13 +222,13 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
+            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.sha }}"
             echo "Creating release directory: $RELEASE_DIR"
             mkdir -p $RELEASE_DIR
       
       - name: Transfer Release Artifact to Production Server
         run: |
-          RELEASE_NAME="${{ github.ref_name || github.sha }}"
+          RELEASE_NAME="${{ github.sha }}"
           rsync -avz release-$RELEASE_NAME.tar.gz \
           ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ secrets.PROD_DEPLOY_DIR }}/releases/$RELEASE_NAME/
 
@@ -259,8 +259,8 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
-            RELEASE_FILE="release-${{ github.ref_name || github.sha }}.tar.gz"
+            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.sha }}"
+            RELEASE_FILE="release-${{ github.sha }}.tar.gz"
 
             echo "Extracting release artifact..."
             cd $RELEASE_DIR
