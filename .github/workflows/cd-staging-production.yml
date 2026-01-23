@@ -139,14 +139,14 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+            RELEASE_DIR="${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}"
             echo "Creating release directory: $RELEASE_DIR"
             mkdir -p $RELEASE_DIR
       
       - name: Transfer Release Artifact to Staging Server
         run: |
           rsync -avz release-${{ github.sha }}.tar.gz \
-          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}/
+          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}/
 
       - name: Predeploy Checks on Staging Server
         uses: appleboy/ssh-action@v1.2.2
@@ -158,9 +158,9 @@ jobs:
             echo "Running pre-deployment checks..."
             
             # Check shared directory
-            if [ ! -d "${{ env.DEPLOY_DIR }}/shared" ]; then
+            if [ ! -d "${{ secrets.STAGING_DEPLOY_DIR }}/shared" ]; then
               echo "Creating shared directory..."
-              mkdir -p "${{ env.DEPLOY_DIR }}/shared"
+              mkdir -p "${{ secrets.STAGING_DEPLOY_DIR }}/shared"
             fi
             echo "Shared directory exists."
             
@@ -175,7 +175,7 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
+            RELEASE_DIR="${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}"
             RELEASE_FILE="release-${{ github.sha }}.tar.gz"
 
             echo "Extracting release artifact..."
@@ -186,15 +186,15 @@ jobs:
 
             echo "Creating symlinks..."
             rm -rf storage
-            ln -sfn $RELEASE_DIR/storage ${{ env.DEPLOY_DIR }}/shared/storage
-            # ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
+            ln -sfn $RELEASE_DIR/storage ${{ secrets.STAGING_DEPLOY_DIR }}/shared/storage
+            # ln -sfn $RELEASE_DIR/.env ${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env
             echo "Symlinks created."
 
             echo "Running Migrations..."
             php artisan migrate --force
 
             echo "Updating current symlink..."
-            ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+            ln -sfn $RELEASE_DIR ${{ secrets.STAGING_DEPLOY_DIR }}/current
 
             echo "Deployment to staging server completed."
 
@@ -206,7 +206,6 @@ jobs:
   # ============================================================
   production:
     name: Deploy to Production
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     needs: stage
     environment: production
@@ -223,7 +222,7 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
+            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
             echo "Creating release directory: $RELEASE_DIR"
             mkdir -p $RELEASE_DIR
       
@@ -231,7 +230,7 @@ jobs:
         run: |
           RELEASE_NAME="${{ github.ref_name || github.sha }}"
           rsync -avz release-$RELEASE_NAME.tar.gz \
-          ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ env.DEPLOY_DIR }}/releases/$RELEASE_NAME/
+          ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ secrets.PROD_DEPLOY_DIR }}/releases/$RELEASE_NAME/
 
       - name: Predeploy Checks on Production Server
         uses: appleboy/ssh-action@v1.2.2
@@ -243,9 +242,9 @@ jobs:
             echo "Running pre-deployment checks..."
             
             # Check shared directory
-            if [ ! -d "${{ env.DEPLOY_DIR }}/shared" ]; then
+            if [ ! -d "${{ secrets.PROD_DEPLOY_DIR }}/shared" ]; then
               echo "Creating shared directory..."
-              mkdir -p "${{ env.DEPLOY_DIR }}/shared"
+              mkdir -p "${{ secrets.PROD_DEPLOY_DIR }}/shared"
             fi
             echo "Shared directory exists."
             
@@ -260,7 +259,7 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
+            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
             RELEASE_FILE="release-${{ github.ref_name || github.sha }}.tar.gz"
 
             echo "Extracting release artifact..."
@@ -271,15 +270,15 @@ jobs:
 
             echo "Creating symlinks..."
             rm -rf storage
-            ln -sfn $RELEASE_DIR/storage ${{ env.DEPLOY_DIR }}/shared/storage
-            # ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
+            ln -sfn $RELEASE_DIR/storage ${{ secrets.PROD_DEPLOY_DIR }}/shared/storage
+            # ln -sfn $RELEASE_DIR/.env ${{ secrets.PROD_DEPLOY_DIR }}/shared/.env
             echo "Symlinks created."
 
             echo "Running Migrations..."
             php artisan migrate --force
 
             echo "Updating current symlink..."
-            ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+            ln -sfn $RELEASE_DIR ${{ secrets.PROD_DEPLOY_DIR }}/current
 
             echo "Deployment to production server completed."
 
@@ -296,9 +295,9 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            PREV=\$(ls -1dt ${{ env.DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            PREV=\$(ls -1dt ${{ secrets.STAGING_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
             [ -n \"\$PREV\" ]
-            ln -sfn \$PREV ${{ env.DEPLOY_DIR }}/current
+            ln -sfn \$PREV ${{ secrets.STAGING_DEPLOY_DIR }}/current
 
   rollback_production:
     name: Rollback production
@@ -313,6 +312,6 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            PREV=\$(ls -1dt ${{ env.DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            PREV=\$(ls -1dt ${{ secrets.PROD_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
             [ -n \"\$PREV\" ]
-            ln -sfn \$PREV ${{ env.DEPLOY_DIR }}/current
+            ln -sfn \$PREV ${{ secrets.PROD_DEPLOY_DIR }}/current
