@@ -123,6 +123,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: self-hosted
 
+    environment: staging
     needs: build
 
     steps:
@@ -199,3 +200,119 @@ jobs:
 
       - name: Verify Staging Deployment
         run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
+
+  # ============================================================
+  # JOB 3: DEPLOY TO PRODUCTION
+  # ============================================================
+  production:
+    name: Deploy to Production
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: self-hosted
+    needs: stage
+    environment: production
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.ref_name || github.sha }}
+      
+      - name: Create Release Directory on Production Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
+            echo "Creating release directory: $RELEASE_DIR"
+            mkdir -p $RELEASE_DIR
+      
+      - name: Transfer Release Artifact to Production Server
+        run: |
+          RELEASE_NAME="${{ github.ref_name || github.sha }}"
+          rsync -avz release-$RELEASE_NAME.tar.gz \
+          ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ env.DEPLOY_DIR }}/releases/$RELEASE_NAME/
+
+      - name: Predeploy Checks on Production Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            echo "Running pre-deployment checks..."
+            
+            # Check shared directory
+            if [ ! -d "${{ env.DEPLOY_DIR }}/shared" ]; then
+              echo "Creating shared directory..."
+              mkdir -p "${{ env.DEPLOY_DIR }}/shared"
+            fi
+            echo "Shared directory exists."
+            
+            echo ".env file exists"   
+
+            echo "Pre-deployment checks completed."
+
+      - name: Deploy Application on Production Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.ref_name || github.sha }}"
+            RELEASE_FILE="release-${{ github.ref_name || github.sha }}.tar.gz"
+
+            echo "Extracting release artifact..."
+            cd $RELEASE_DIR
+            tar -xzf $RELEASE_FILE
+            rm $RELEASE_FILE
+            echo "Extraction completed."
+
+            echo "Creating symlinks..."
+            rm -rf storage
+            ln -sfn $RELEASE_DIR/storage ${{ env.DEPLOY_DIR }}/shared/storage
+            # ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
+            echo "Symlinks created."
+
+            echo "Running Migrations..."
+            php artisan migrate --force
+
+            echo "Updating current symlink..."
+            ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
+
+            echo "Deployment to production server completed."
+
+  rollback_staging:
+    name: Rollback staging
+    if: failure()
+    runs-on: self-hosted
+    needs: stage
+    steps:
+      - name: Deploy Application on Production Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            PREV=\$(ls -1dt ${{ env.DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            [ -n \"\$PREV\" ]
+            ln -sfn \$PREV ${{ env.DEPLOY_DIR }}/current
+
+  rollback_production:
+    name: Rollback production
+    if: failure()
+    runs-on: self-hosted
+    needs: production
+    steps:
+      - name: Deploy Application on Production Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            PREV=\$(ls -1dt ${{ env.DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            [ -n \"\$PREV\" ]
+            ln -sfn \$PREV ${{ env.DEPLOY_DIR }}/current
