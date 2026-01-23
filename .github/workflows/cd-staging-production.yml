@@ -163,11 +163,6 @@ jobs:
             fi
             echo "Shared directory exists."
             
-            # Check .env file
-            if [ ! -f "${{ env.DEPLOY_DIR }}/shared/.env" ]; then
-              echo ".env file not found"
-              exit 1
-            fi
             echo ".env file exists"   
 
             echo "Pre-deployment checks completed."
@@ -182,25 +177,25 @@ jobs:
             RELEASE_DIR="${{ env.DEPLOY_DIR }}/releases/${{ github.sha }}"
             RELEASE_FILE="release-${{ github.sha }}.tar.gz"
 
-            echo "📂 Extracting release artifact..."
+            echo "Extracting release artifact..."
             cd $RELEASE_DIR
             tar -xzf $RELEASE_FILE
             rm $RELEASE_FILE
-            echo "✅ Extraction completed."
+            echo "Extraction completed."
 
-            echo "🔗 Creating symlinks..."
+            echo "Creating symlinks..."
             rm -rf storage
             ln -sfn $RELEASE_DIR/storage ${{ env.DEPLOY_DIR }}/shared/storage
-            ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
-            echo "✅ Symlinks created."
+            # ln -sfn $RELEASE_DIR/.env ${{ env.DEPLOY_DIR }}/shared/.env
+            echo "Symlinks created."
 
-            echo "📂 Running Migrations..."
+            echo "Running Migrations..."
             php artisan migrate --force
 
-            echo "🔗 Updating current symlink..."
+            echo "Updating current symlink..."
             ln -sfn $RELEASE_DIR ${{ env.DEPLOY_DIR }}/current
 
-            echo "✅ Deployment to staging server completed."
+            echo "Deployment to staging server completed."
 
       - name: Verify Staging Deployment
         run: curl -f "${{ secrets.STAGING_APP_URL }}/api/health"
