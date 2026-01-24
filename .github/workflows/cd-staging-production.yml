@@ -11,7 +11,6 @@ on:
 env:
   PHP_VERSION: '8.4'
   NODE_VERSION: '20'
-  DEPLOY_DIR: '/var/www/comprasventas'
 
 jobs:
 
@@ -26,7 +25,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up PHP
+      - name: Set up PHP ${{ env.PHP_VERSION }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ env.PHP_VERSION }}
@@ -155,7 +154,9 @@ jobs:
             # Check .env file
             if [ ! -f "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
-              printf "%s" "${{ secrets.STAGING_ENV_CONTENT }}" > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
+              cat <<EOF > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
+              ${{ secrets.STAGING_ENV_CONTENT }}
+              EOF  
             fi
             echo ".env file exists."            
 
@@ -237,7 +238,9 @@ jobs:
             # Check .env file
             if [ ! -f "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
-              printf "%s" "${{ secrets.PROD_ENV_CONTENT }}" > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
+              cat <<EOF > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
+              ${{ secrets.PROD_ENV_CONTENT }}
+              EOF
             fi
             echo ".env file exists"            
 
@@ -279,6 +282,9 @@ jobs:
 
             echo "Deployment to production server completed."
 
+      - name: Verify Production Deployment
+        run: curl -f "${{ secrets.PROD_APP_URL }}/api/health"
+
   rollback_staging:
     name: Rollback staging
     if: failure()
@@ -293,8 +299,32 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            PREV=$(ls -1dt ${{ secrets.STAGING_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
-            [ -n "$PREV" ] && ln -sfn $PREV ${{ secrets.STAGING_DEPLOY_DIR }}/current
+            cd ${{ secrets.STAGING_DEPLOY_DIR }}/releases
+            
+            # Get current release
+            CURRENT=$(basename $(readlink ${{ secrets.STAGING_DEPLOY_DIR }}/current))
+            
+            # Get previous release (second most recent)
+            PREVIOUS=$(ls -t | grep -v "$CURRENT" | head -n 1)
+            
+            if [ -z "$PREVIOUS" ]; then
+              echo "Error: No previous release found!"
+              exit 1
+            fi
+            
+            echo "Rolling back from $CURRENT to $PREVIOUS"
+            
+            # Update symlink to previous release
+            ln -sfn ${{ secrets.STAGING_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.STAGING_DEPLOY_DIR }}/current-new
+            mv -Tf ${{ secrets.STAGING_DEPLOY_DIR }}/current-new ${{ secrets.STAGING_DEPLOY_DIR }}/current
+            
+            # Clear caches
+            cd ${{ secrets.STAGING_DEPLOY_DIR }}/current
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
+            
+            echo "Rollback successful! Now on release: $PREVIOUS"
 
   rollback_production:
     name: Rollback production
@@ -310,5 +340,29 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            PREV=$(ls -1dt ${{ secrets.PROD_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
-            [ -n "$PREV" ] && ln -sfn $PREV ${{ secrets.PROD_DEPLOY_DIR }}/current
+            cd ${{ secrets.PROD_DEPLOY_DIR }}/releases
+            
+            # Get current release
+            CURRENT=$(basename $(readlink ${{ secrets.PROD_DEPLOY_DIR }}/current))
+            
+            # Get previous release (second most recent)
+            PREVIOUS=$(ls -t | grep -v "$CURRENT" | head -n 1)
+            
+            if [ -z "$PREVIOUS" ]; then
+              echo "Error: No previous release found!"
+              exit 1
+            fi
+            
+            echo "Rolling back from $CURRENT to $PREVIOUS"
+            
+            # Update symlink to previous release
+            ln -sfn ${{ secrets.PROD_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.PROD_DEPLOY_DIR }}/current-new
+            mv -Tf ${{ secrets.PROD_DEPLOY_DIR }}/current-new ${{ secrets.PROD_DEPLOY_DIR }}/current
+            
+            # Clear caches
+            cd ${{ secrets.PROD_DEPLOY_DIR }}/current
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
+            
+            echo "Rollback successful! Now on release: $PREVIOUS"
