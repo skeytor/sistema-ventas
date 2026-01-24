@@ -315,8 +315,7 @@ jobs:
             echo "Rolling back from $CURRENT to $PREVIOUS"
             
             # Update symlink to previous release
-            ln -sfn ${{ secrets.STAGING_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.STAGING_DEPLOY_DIR }}/current-new
-            mv -Tf ${{ secrets.STAGING_DEPLOY_DIR }}/current-new ${{ secrets.STAGING_DEPLOY_DIR }}/current
+            ln -sfn ${{ secrets.STAGING_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.STAGING_DEPLOY_DIR }}/current
             
             # Clear caches
             cd ${{ secrets.STAGING_DEPLOY_DIR }}/current
@@ -356,8 +355,7 @@ jobs:
             echo "Rolling back from $CURRENT to $PREVIOUS"
             
             # Update symlink to previous release
-            ln -sfn ${{ secrets.PROD_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.PROD_DEPLOY_DIR }}/current-new
-            mv -Tf ${{ secrets.PROD_DEPLOY_DIR }}/current-new ${{ secrets.PROD_DEPLOY_DIR }}/current
+            ln -sfn ${{ secrets.PROD_DEPLOY_DIR }}/releases/$PREVIOUS ${{ secrets.PROD_DEPLOY_DIR }}/current
             
             # Clear caches
             cd ${{ secrets.PROD_DEPLOY_DIR }}/current
