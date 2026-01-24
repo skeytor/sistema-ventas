@@ -132,22 +132,6 @@ jobs:
         with:
           name: release-${{ github.sha }}
       
-      - name: Create Release Directory on Staging Server
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          password: ${{ secrets.STAGING_PASSWORD }}
-          script: |
-            RELEASE_DIR="${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}"
-            echo "Creating release directory: $RELEASE_DIR"
-            mkdir -p $RELEASE_DIR
-      
-      - name: Transfer Release Artifact to Staging Server
-        run: |
-          rsync -avz release-${{ github.sha }}.tar.gz \
-          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}/
-
       - name: Predeploy Checks on Staging Server
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -155,18 +139,32 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
+            RELEASE_DIR="${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}"
             echo "Running pre-deployment checks..."
-            
+
+            echo "Creating release directory: $RELEASE_DIR"
+            mkdir -p $RELEASE_DIR          
+
             # Check shared directory
             if [ ! -d "${{ secrets.STAGING_DEPLOY_DIR }}/shared" ]; then
               echo "Creating shared directory..."
               mkdir -p "${{ secrets.STAGING_DEPLOY_DIR }}/shared"
             fi
             echo "Shared directory exists."
-            
-            echo ".env file exists"   
+
+            # Check .env file
+            if [ ! -f "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env" ]; then
+              echo "Creating .env file..."
+              echo "${{ secrets.STAGING_ENV_CONTENT }}" > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
+            fi
+            echo ".env file exists."            
 
             echo "Pre-deployment checks completed."
+      
+      - name: Transfer Release Artifact to Staging Server
+        run: |
+          rsync -avz release-${{ github.sha }}.tar.gz \
+          ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:${{ secrets.STAGING_DEPLOY_DIR }}/releases/${{ github.sha }}/
 
       - name: Deploy Application on Staging Server
         uses: appleboy/ssh-action@v1.2.2
@@ -186,8 +184,8 @@ jobs:
 
             echo "Creating symlinks..."
             rm -rf storage
-            ln -sfn $RELEASE_DIR/storage ${{ secrets.STAGING_DEPLOY_DIR }}/shared/storage
-            # ln -sfn $RELEASE_DIR/.env ${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env
+            ln -sfn ${{ secrets.STAGING_DEPLOY_DIR }}/shared/storage $RELEASE_DIR/storage
+            ln -sfn ${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env $RELEASE_DIR/.env
             echo "Symlinks created."
 
             echo "Running Migrations..."
@@ -214,23 +212,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-${{ github.sha }}
-      
-      - name: Create Release Directory on Production Server
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          password: ${{ secrets.PROD_PASSWORD }}
-          script: |
-            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.sha }}"
-            echo "Creating release directory: $RELEASE_DIR"
-            mkdir -p $RELEASE_DIR
-      
-      - name: Transfer Release Artifact to Production Server
-        run: |
-          RELEASE_NAME="${{ github.sha }}"
-          rsync -avz release-$RELEASE_NAME.tar.gz \
-          ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ secrets.PROD_DEPLOY_DIR }}/releases/$RELEASE_NAME/
 
       - name: Predeploy Checks on Production Server
         uses: appleboy/ssh-action@v1.2.2
@@ -239,18 +220,34 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
+            RELEASE_DIR="${{ secrets.PROD_DEPLOY_DIR }}/releases/${{ github.sha }}"
+
             echo "Running pre-deployment checks..."
-            
+
+            echo "Creating release directory: $RELEASE_DIR"
+            mkdir -p $RELEASE_DIR          
+
             # Check shared directory
             if [ ! -d "${{ secrets.PROD_DEPLOY_DIR }}/shared" ]; then
               echo "Creating shared directory..."
               mkdir -p "${{ secrets.PROD_DEPLOY_DIR }}/shared"
             fi
             echo "Shared directory exists."
-            
-            echo ".env file exists"   
+
+            # Check .env file
+            if [ ! -f "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env" ]; then
+              echo "Creating .env file..."
+              echo "${{ secrets.PROD_ENV_CONTENT }}" > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
+            fi
+            echo ".env file exists"            
 
             echo "Pre-deployment checks completed."
+      
+      - name: Transfer Release Artifact to Production Server
+        run: |
+          RELEASE_NAME="${{ github.sha }}"
+          rsync -avz release-$RELEASE_NAME.tar.gz \
+          ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:${{ secrets.PROD_DEPLOY_DIR }}/releases/$RELEASE_NAME/
 
       - name: Deploy Application on Production Server
         uses: appleboy/ssh-action@v1.2.2
@@ -270,8 +267,8 @@ jobs:
 
             echo "Creating symlinks..."
             rm -rf storage
-            ln -sfn $RELEASE_DIR/storage ${{ secrets.PROD_DEPLOY_DIR }}/shared/storage
-            # ln -sfn $RELEASE_DIR/.env ${{ secrets.PROD_DEPLOY_DIR }}/shared/.env
+            ln -sfn ${{ secrets.PROD_DEPLOY_DIR }}/shared/storage $RELEASE_DIR/storage
+            ln -sfn ${{ secrets.PROD_DEPLOY_DIR }}/shared/.env $RELEASE_DIR/.env
             echo "Symlinks created."
 
             echo "Running Migrations..."
@@ -287,8 +284,9 @@ jobs:
     if: failure()
     runs-on: self-hosted
     needs: stage
+    environment: staging
     steps:
-      - name: Deploy Application on Production Server
+      - name: Deploy Application on Staging Server
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -304,6 +302,7 @@ jobs:
     if: failure()
     runs-on: self-hosted
     needs: production
+    environment: production
     steps:
       - name: Deploy Application on Production Server
         uses: appleboy/ssh-action@v1.2.2
