@@ -155,7 +155,7 @@ jobs:
             # Check .env file
             if [ ! -f "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
-              cat << 'EOF' > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
+              printf "%s" "${{ secrets.STAGING_ENV_CONTENT }}" > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
             fi
             echo ".env file exists."            
 
@@ -237,7 +237,7 @@ jobs:
             # Check .env file
             if [ ! -f "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
-              cat << 'EOF' > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
+              printf "%s" "${{ secrets.PROD_ENV_CONTENT }}" > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
             fi
             echo ".env file exists"            
 
@@ -293,9 +293,8 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            PREV=\$(ls -1dt ${{ secrets.STAGING_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
-            [ -n \"\$PREV\" ]
-            ln -sfn \$PREV ${{ secrets.STAGING_DEPLOY_DIR }}/current
+            PREV=$(ls -1dt ${{ secrets.STAGING_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            [ -n "$PREV" ] && ln -sfn $PREV ${{ secrets.STAGING_DEPLOY_DIR }}/current
 
   rollback_production:
     name: Rollback production
@@ -311,6 +310,5 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            PREV=\$(ls -1dt ${{ secrets.PROD_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
-            [ -n \"\$PREV\" ]
-            ln -sfn \$PREV ${{ secrets.PROD_DEPLOY_DIR }}/current
+            PREV=$(ls -1dt ${{ secrets.PROD_DEPLOY_DIR }}/releases/*/ | sed -n '2p' | tr -d '/')
+            [ -n "$PREV" ] && ln -sfn $PREV ${{ secrets.PROD_DEPLOY_DIR }}/current
