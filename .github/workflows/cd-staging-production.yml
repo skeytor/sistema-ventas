@@ -155,8 +155,8 @@ jobs:
             if [ ! -f "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
               cat <<EOF > "${{ secrets.STAGING_DEPLOY_DIR }}/shared/.env"
-              ${{ secrets.STAGING_ENV_CONTENT }}
-              EOF  
+            ${{ secrets.STAGING_ENV_CONTENT }}
+            EOF
             fi
             echo ".env file exists."            
 
@@ -239,8 +239,8 @@ jobs:
             if [ ! -f "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env" ]; then
               echo "Creating .env file..."
               cat <<EOF > "${{ secrets.PROD_DEPLOY_DIR }}/shared/.env"
-              ${{ secrets.PROD_ENV_CONTENT }}
-              EOF
+            ${{ secrets.PROD_ENV_CONTENT }}
+            EOF
             fi
             echo ".env file exists"            
 
