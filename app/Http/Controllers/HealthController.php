@@ -96,7 +96,7 @@ class HealthController extends Controller
         ];
     }
 
-    private function  checkStorage(): array
+    private function checkStorage(): array
     {
         $ok = false;
         $error = null;
